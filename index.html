@@ -1,117 +1,35 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>TikTok Downloader (Demo)</title>
-  <style>
-    :root { --bg:#0b1220; --card:#0f172a; --text:#e2e8f0; --muted:#94a3b8; --accent:#60a5fa; --ok:#22c55e; --bad:#ef4444; }
-    * { box-sizing: border-box; }
-    body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto; background:linear-gradient(180deg,#0b1220,#0b1220 40%,#0d1b2a); color:var(--text); }
-    .wrap { max-width: 720px; margin: 48px auto; padding: 0 16px; }
-    .card { background:var(--card); border:1px solid #1f2a44; border-radius:18px; padding:24px; box-shadow:0 10px 30px rgba(0,0,0,.35); }
-    h1 { margin:0 0 8px; font-size:22px; }
-    p.muted { color:var(--muted); margin:0 0 16px; }
-    .row { display:flex; gap:10px; }
-    input[type="url"] { flex:1; padding:12px 14px; border-radius:12px; border:1px solid #273a66; background:#0b1530; color:var(--text); outline:none; }
-    button { padding:12px 16px; border-radius:12px; border:0; background:var(--accent); color:#031227; font-weight:700; cursor:pointer; }
-    button:disabled { opacity:.6; cursor:not-allowed; }
-    .status { margin-top:12px; font-size:14px; }
-    .status.ok { color:var(--ok); }
-    .status.bad { color:var(--bad); }
-    .out { margin-top:18px; display:none; }
-    .grid { display:grid; grid-template-columns: 1fr; gap:16px; }
-    .kv { background:#0b1530; border:1px solid #1f2a44; border-radius:12px; padding:12px; font-size:14px; word-break:break-all; }
-    video { width:100%; border-radius:14px; background:#000; }
-    .small { font-size:12px; color:var(--muted); }
-    .foot { margin-top:14px; display:flex; gap:8px; flex-wrap:wrap; }
-    a.btn { text-decoration:none; padding:10px 12px; background:#172554; border:1px solid #1f2a44; color:var(--text); border-radius:10px; font-size:14px; }
-  </style>
+  <meta charset="UTF-8">
+  <title>TikTok Downloader</title>
 </head>
 <body>
-  <div class="wrap">
-    <div class="card">
-      <h1>Unduh Video TikTok (Tanpa Watermark) — Demo Vercel</h1>
-      <p class="muted">Masukkan URL video TikTok publik. Frontend memanggil API serverless Vercel untuk parsing & proxy.</p>
-      <div class="row">
-        <input id="u" type="url" placeholder="https://www.tiktok.com/@username/video/1234567890" />
-        <button id="go">Proses</button>
-      </div>
-      <div id="status" class="status"></div>
+  <h1>TikTok Downloader</h1>
 
-      <div id="out" class="out">
-        <div class="grid">
-          <div class="kv"><b>Judul/Deskripsi:</b> <span id="desc">-</span></div>
-          <div class="kv"><b>Video ID:</b> <span id="vid">-</span></div>
-          <div class="kv"><b>Sumber:</b> <span id="src" class="small">-</span></div>
-        </div>
-        <video id="player" controls playsinline></video>
-        <div class="foot">
-          <a id="dl" class="btn" target="_blank" rel="noopener">Download via Proxy</a>
-          <a id="raw" class="btn" target="_blank" rel="noopener">Buka playAddr (raw)</a>
-        </div>
-        <p class="small">Catatan: ini demo edukasi. Penggunaan harus sesuai hukum & ToS TikTok.</p>
-      </div>
-    </div>
-  </div>
+  <input type="text" id="url" placeholder="Paste TikTok URL" size="50">
+  <button onclick="fetchVideo()">Ambil Video</button>
+
+  <div id="result" style="margin-top:20px;"></div>
 
   <script>
-    const $ = (q)=>document.querySelector(q);
-    const S = $("#status");
-    const btn = $("#go");
-    const out = $("#out");
-    const desc = $("#desc");
-    const vid = $("#vid");
-    const src = $("#src");
-    const player = $("#player");
-    const aDl = $("#dl");
-    const aRaw = $("#raw");
+    async function fetchVideo() {
+      const url = document.getElementById("url").value;
+      if (!url) return alert("Masukkan URL TikTok");
 
-    function setStatus(msg, ok=false) {
-      S.textContent = msg;
-      S.className = "status " + (ok ? "ok" : "bad");
+      const res = await fetch(`/api/download?src=${encodeURIComponent(url)}`);
+      const data = await res.json();
+
+      const container = document.getElementById("result");
+      if (data.error) {
+        container.innerHTML = `<p style="color:red">${data.error}</p>`;
+      } else {
+        container.innerHTML = `
+          <p>${data.description}</p>
+          <video controls width="320" src="${data.video}"></video>
+        `;
+      }
     }
-
-    btn.addEventListener("click", async () => {
-      const url = $("#u").value.trim();
-      if (!/^https?:\/\/(www\.)?tiktok\.com\//i.test(url)) {
-        setStatus("URL harus TikTok yang valid.", false);
-        return;
-      }
-      btn.disabled = true;
-      setStatus("Memproses… (serverless proxy)", true);
-      out.style.display = "none";
-      player.removeAttribute("src");
-
-      try {
-        const r = await fetch(`/api/scrape?url=${encodeURIComponent(url)}`);
-        if (!r.ok) {
-          const e = await r.json().catch(()=>({error:`HTTP ${r.status}`}));
-          throw new Error(e.error || `HTTP ${r.status}`);
-        }
-        const data = await r.json();
-
-        if (!data?.videoUrl) throw new Error("Tidak menemukan data video.");
-        // Siapkan URL proxy download untuk hindari CORS:
-        const proxied = `/api/download?src=${encodeURIComponent(data.videoUrl)}`;
-
-        desc.textContent = data.desc || "(tanpa deskripsi)";
-        vid.textContent = data.id || "-";
-        src.textContent = data.videoUrl;
-        player.src = proxied;
-
-        aDl.href = proxied;
-        aRaw.href = data.videoUrl;
-
-        out.style.display = "block";
-        setStatus("Berhasil ambil video (via proxy).", true);
-      } catch (err) {
-        console.error(err);
-        setStatus(`Error: ${err.message}`, false);
-      } finally {
-        btn.disabled = false;
-      }
-    });
   </script>
 </body>
 </html>
